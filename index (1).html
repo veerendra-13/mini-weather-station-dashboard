@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Weather Station</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+apiKey: "YOUR_API_KEY",
+authDomain: "YOUR_PROJECT.firebaseapp.com",
+databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+projectId: "YOUR_PROJECT",
+storageBucket: "YOUR_PROJECT.appspot.com",
+messagingSenderId: "XXXX",
+appId: "XXXX"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+window.weatherRef = ref(db, "weather");
+window.historyRef = ref(db, "weatherHistory");
+</script>
+
+<style>
+body{
+margin:0;
+font-family: 'Segoe UI', sans-serif;
+background:
+linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)),
+url("https://images.unsplash.com/photo-1499346030926-9a72daac6c63");
+background-size:cover;
+background-attachment:fixed;
+background-position:center;
+color:white;
+overflow-x:hidden;
+}
+
+/* Smooth fade animation */
+.page{
+opacity:0;
+transform:translateY(20px);
+transition: all 0.5s ease;
+}
+
+.page.active{
+opacity:1;
+transform:translateY(0);
+}
+
+/* Header */
+.header{
+padding:20px;
+text-align:center;
+position:relative;
+backdrop-filter: blur(8px);
+background: rgba(0,0,0,0.4);
+}
+
+/* Animated weather icon */
+.weather-icon{
+display:inline-block;
+animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float{
+0%{transform:translateY(0);}
+50%{transform:translateY(-8px);}
+100%{transform:translateY(0);}
+}
+
+/* Button */
+.header button{
+position:absolute;
+right:20px;
+top:20px;
+padding:8px 16px;
+border:none;
+border-radius:20px;
+cursor:pointer;
+background: linear-gradient(45deg,#00c6ff,#0072ff);
+color:white;
+font-weight:bold;
+box-shadow:0 0 10px rgba(0,114,255,0.6);
+transition:0.3s;
+}
+
+.header button:hover{
+transform:scale(1.05);
+}
+
+/* Cards */
+.cards{
+display:flex;
+flex-wrap:wrap;
+justify-content:center;
+margin-top:10px;
+}
+
+.card{
+background: rgba(255,255,255,0.1);
+backdrop-filter: blur(10px);
+padding:14px 18px;
+margin:8px;
+border-radius:15px;
+min-width:150px;
+font-weight:bold;
+box-shadow:0 0 20px rgba(0,0,0,0.5);
+transition:0.3s;
+}
+
+.card:hover{
+transform:translateY(-5px);
+}
+
+/* Charts */
+.charts{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+gap:15px;
+padding:20px;
+}
+
+.chartBox{
+background: rgba(255,255,255,0.08);
+backdrop-filter: blur(10px);
+height:320px;
+padding:12px;
+border-radius:15px;
+box-shadow:0 0 25px rgba(0,0,0,0.7);
+transition:0.3s;
+}
+
+.chartBox:hover{
+transform:scale(1.02);
+}
+
+/* History Page */
+#historyPage{
+padding:20px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+background:rgba(0,0,0,0.6);
+backdrop-filter:blur(8px);
+border-radius:10px;
+overflow:hidden;
+}
+
+th,td{
+border:1px solid rgba(255,255,255,0.2);
+padding:10px;
+text-align:center;
+}
+
+th{
+background:rgba(255,255,255,0.1);
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- MAIN DASHBOARD -->
+<div id="mainPage" class="page active">
+
+<div class="header">
+<h2>
+<span class="weather-icon">⛅</span>
+Mini Weather Station Dashboard
+</h2>
+<button onclick="openHistory()">📅 Past Hourly Data</button>
+</div>
+
+<div class="cards">
+<div class="card">🌡 Temp: <span id="temp">--</span> °C</div>
+<div class="card">💧 Humidity: <span id="hum">--</span> %</div>
+<div class="card">🌪 Pressure: <span id="press">--</span> hPa</div>
+<div class="card">🌫 Air: <span id="air">--</span></div>
+<div class="card">💡 Light: <span id="lux">--</span> Lux</div>
+<div class="card">🌧 Rain: <span id="rain">--</span></div>
+</div>
+
+<div class="charts">
+<div class="chartBox"><canvas id="tChart"></canvas></div>
+<div class="chartBox"><canvas id="hChart"></canvas></div>
+<div class="chartBox"><canvas id="pChart"></canvas></div>
+<div class="chartBox"><canvas id="aChart"></canvas></div>
+<div class="chartBox"><canvas id="lChart"></canvas></div>
+<div class="chartBox"><canvas id="rChart"></canvas></div>
+</div>
+
+</div>
+
+<!-- HISTORY PAGE -->
+<div id="historyPage" class="page">
+
+<div class="header">
+<h2>📅 Past Hourly Weather Data</h2>
+<button onclick="closeHistory()">⬅ Back</button>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Temp</th>
+<th>Humidity</th>
+<th>Pressure</th>
+<th>Air</th>
+<th>Light</th>
+<th>Rain</th>
+</tr>
+</thead>
+<tbody id="historyTable"></tbody>
+</table>
+
+</div>
+
+<script type="module">
+import { onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+/* Smooth Page Switch */
+window.openHistory = () => {
+mainPage.classList.remove("active");
+setTimeout(()=>{mainPage.style.display="none";historyPage.style.display="block";historyPage.classList.add("active");},300);
+}
+
+window.closeHistory = () => {
+historyPage.classList.remove("active");
+setTimeout(()=>{historyPage.style.display="none";mainPage.style.display="block";mainPage.classList.add("active");},300);
+}
+
+/* Charts */
+function createChart(id,label){
+return new Chart(document.getElementById(id),{
+type:"line",
+data:{labels:[],datasets:[{label:label,data:[],borderWidth:3}]},
+options:{
+responsive:true,
+maintainAspectRatio:false,
+scales:{
+x:{ticks:{color:"white"}},
+y:{ticks:{color:"white"}}
+},
+plugins:{
+legend:{labels:{color:"white"}}
+}
+}
+});
+}
+
+const charts={
+t:createChart("tChart","Temperature"),
+h:createChart("hChart","Humidity"),
+p:createChart("pChart","Pressure"),
+a:createChart("aChart","Air"),
+l:createChart("lChart","Light"),
+r:createChart("rChart","Rain")
+};
+
+/* Live Data */
+onValue(window.weatherRef,(snap)=>{
+const d=snap.val();
+const time=new Date().toLocaleTimeString();
+
+temp.innerHTML=d.temperature;
+hum.innerHTML=d.humidity;
+press.innerHTML=d.pressure;
+air.innerHTML=d.airQuality;
+lux.innerHTML=d.light;
+rain.innerHTML=d.rain;
+
+Object.values(charts).forEach(c=>{
+c.data.labels.push(time);
+if(c.data.labels.length>20)c.data.labels.shift();
+});
+
+charts.t.data.datasets[0].data.push(d.temperature);
+charts.h.data.datasets[0].data.push(d.humidity);
+charts.p.data.datasets[0].data.push(d.pressure);
+charts.a.data.datasets[0].data.push(d.airQuality);
+charts.l.data.datasets[0].data.push(d.light);
+charts.r.data.datasets[0].data.push(d.rain);
+
+Object.values(charts).forEach(c=>{
+if(c.data.datasets[0].data.length>20)
+c.data.datasets[0].data.shift();
+c.update();
+});
+});
+
+/* History Data */
+onValue(window.historyRef,(snap)=>{
+const data=snap.val();
+historyTable.innerHTML="";
+for(let time in data){
+const d=data[time];
+historyTable.innerHTML+=`
+<tr>
+<td>${time}</td>
+<td>${d.temperature}</td>
+<td>${d.humidity}</td>
+<td>${d.pressure}</td>
+<td>${d.airQuality}</td>
+<td>${d.light}</td>
+<td>${d.rain}</td>
+</tr>`;
+}
+});
+</script>
+
+</body>
+</html>
